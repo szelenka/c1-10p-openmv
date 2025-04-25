@@ -1,0 +1,3 @@
+[submodule "Adafruit_MicroPython_LED_Animation"]
+	path = Adafruit_MicroPython_LED_Animation
+	url = https://github.com/szelenka/Adafruit_MicroPython_LED_Animation.git
