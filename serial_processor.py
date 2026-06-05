@@ -7,7 +7,6 @@ CMD_LED_SET_PATTERN = 0x03
 CMD_LED_OFF = 0x04
 CMD_LED_ON = 0x05
 CMD_TRACKING_SET = 0x10
-CMD_PERISCOPE_STATE = 0x20
 
 LED_ID_RIGHT_EYE = 1
 LED_ID_LEFT_EYE = 2
@@ -119,8 +118,8 @@ class SerialCommandProcessor:
             LED_ID_LEFT_EYE: self._new_led_state(),
             LED_ID_PERISCOPE: self._new_led_state(),
         }
+        self.led_state[LED_ID_PERISCOPE]["enabled"] = False
         self.animations_by_led_id = animations_by_led_id or {}
-        self.periscope_lifted = False
         self.tracking_enabled = False
         self.on_tracking_set = on_tracking_set
         self._reset_frame()
@@ -201,8 +200,6 @@ class SerialCommandProcessor:
             self._handle_led_on(payload)
         elif cmd == CMD_TRACKING_SET:
             self._handle_tracking_set(payload)
-        elif cmd == CMD_PERISCOPE_STATE:
-            self._handle_periscope_state(payload)
 
     def _handle_led_set_color(self, payload):
         if len(payload) != 5:
@@ -253,15 +250,6 @@ class SerialCommandProcessor:
         if self.on_tracking_set:
             self.on_tracking_set(self.tracking_enabled)
 
-    def _handle_periscope_state(self, payload):
-        if len(payload) != 1:
-            return
-        self.periscope_lifted = payload[0] != 0
-        if self.periscope_lifted:
-            self.apply_led(LED_ID_PERISCOPE)
-        else:
-            self._turn_off_led_id(LED_ID_PERISCOPE)
-
     def apply_all(self):
         self.apply_led(LED_ID_RIGHT_EYE)
         self.apply_led(LED_ID_LEFT_EYE)
@@ -272,9 +260,6 @@ class SerialCommandProcessor:
         if not state:
             return
         if not state["enabled"]:
-            self._turn_off_led_id(led_id)
-            return
-        if led_id == LED_ID_PERISCOPE and not self.periscope_lifted:
             self._turn_off_led_id(led_id)
             return
 
