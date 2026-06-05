@@ -17,7 +17,6 @@ from serial_processor import (
     LED_ID_LEFT_EYE,
     LED_ID_PERISCOPE,
     LED_ID_RIGHT_EYE,
-    SerialLedOutput,
     SerialCommandProcessor
 )
 
@@ -64,6 +63,12 @@ pulse_eye_left = Pulse(
     max_intensity=0.3
 )
 
+eye_group = AnimationGroup(
+    pulse_eye_right,
+    pulse_eye_left,
+    sync=True
+)
+
 group = AnimationGroup(
     Comet(
         pixel_ladder,
@@ -73,8 +78,7 @@ group = AnimationGroup(
         tail_length=4,
         bounce=True
     ),
-    pulse_eye_right,
-    pulse_eye_left,
+    eye_group,
     periscope_output
 )
 
