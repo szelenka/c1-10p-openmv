@@ -7,6 +7,7 @@ CMD_LED_SET_PATTERN = 0x03
 CMD_LED_OFF = 0x04
 CMD_LED_ON = 0x05
 CMD_TRACKING_SET = 0x10
+CMD_VISION_RESULT = 0x80
 
 LED_ID_RIGHT_EYE = 1
 LED_ID_LEFT_EYE = 2
@@ -20,6 +21,98 @@ WAIT_CHECKSUM = 4
 
 DEFAULT_COLOR = (0, 0, 255, 0)
 OFF = (0, 0, 0)
+
+
+def _clamp(value, minimum, maximum):
+    value = int(value)
+    if value < minimum:
+        return minimum
+    if value > maximum:
+        return maximum
+    return value
+
+
+def _int16_to_bytes(value):
+    value = _clamp(value, -32768, 32767)
+    if value < 0:
+        value += 0x10000
+    return [(value >> 8) & 0xFF, value & 0xFF]
+
+
+def _uint16_to_bytes(value):
+    value = _clamp(value, 0, 0xFFFF)
+    return [(value >> 8) & 0xFF, value & 0xFF]
+
+
+def _uint8(value):
+    return _clamp(value, 0, 0xFF)
+
+
+def build_frame(cmd, payload):
+    cmd = _uint8(cmd)
+    payload = [_uint8(byte) for byte in payload]
+    checksum = cmd ^ len(payload)
+    for byte in payload:
+        checksum ^= byte
+    return bytes([SYNC, cmd, len(payload)] + payload + [checksum & 0xFF])
+
+
+def build_vision_result_payload(
+    center_x,
+    center_y,
+    width,
+    height,
+    confidence,
+    detected,
+):
+    payload = []
+    payload.extend(_int16_to_bytes(center_x))
+    payload.extend(_int16_to_bytes(center_y))
+    payload.extend(_uint16_to_bytes(width))
+    payload.extend(_uint16_to_bytes(height))
+    payload.append(_uint8(confidence))
+    payload.append(1 if detected else 0)
+    return bytes(payload)
+
+
+def build_vision_result_frame(
+    center_x,
+    center_y,
+    width,
+    height,
+    confidence,
+    detected,
+):
+    payload = build_vision_result_payload(
+        center_x,
+        center_y,
+        width,
+        height,
+        confidence,
+        detected,
+    )
+    return build_frame(CMD_VISION_RESULT, payload)
+
+
+def send_vision_result(
+    uart,
+    center_x,
+    center_y,
+    width,
+    height,
+    confidence,
+    detected,
+):
+    uart.write(
+        build_vision_result_frame(
+            center_x,
+            center_y,
+            width,
+            height,
+            confidence,
+            detected,
+        )
+    )
 
 
 class SerialLedOutput:

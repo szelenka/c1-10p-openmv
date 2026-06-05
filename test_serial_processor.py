@@ -7,6 +7,7 @@ from serial_processor import (
     CMD_LED_SET_COLOR,
     CMD_LED_SET_PATTERN,
     CMD_TRACKING_SET,
+    CMD_VISION_RESULT,
     LED_ID_LEFT_EYE,
     LED_ID_PERISCOPE,
     LED_ID_RIGHT_EYE,
@@ -14,6 +15,8 @@ from serial_processor import (
     SYNC,
     SerialCommandProcessor,
     SerialLedOutput,
+    build_vision_result_frame,
+    build_vision_result_payload,
 )
 
 
@@ -286,6 +289,63 @@ class SerialCommandProcessorTest(unittest.TestCase):
         self.assertEqual((0, 0, 255), self.right_pulse.color)
         self.assertEqual((0, 0, 255), self.left_pulse.color)
 
+
+class VisionResultFrameTest(unittest.TestCase):
+    def test_build_vision_result_payload_uses_big_endian_wire_layout(self):
+        payload = build_vision_result_payload(100, -50, 80, 60, 200, True)
+
+        self.assertEqual(
+            bytes(
+                [
+                    0x00,
+                    0x64,
+                    0xFF,
+                    0xCE,
+                    0x00,
+                    0x50,
+                    0x00,
+                    0x3C,
+                    200,
+                    1,
+                ]
+            ),
+            payload,
+        )
+
+    def test_build_vision_result_frame_matches_esp32_protocol(self):
+        expected_payload = [0x00, 0x64, 0xFF, 0xCE, 0x00, 0x50, 0x00, 0x3C, 200, 1]
+
+        self.assertEqual(
+            frame(CMD_VISION_RESULT, expected_payload),
+            build_vision_result_frame(100, -50, 80, 60, 200, True),
+        )
+
+    def test_build_vision_result_frame_can_report_no_detection(self):
+        self.assertEqual(
+            frame(CMD_VISION_RESULT, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+            build_vision_result_frame(0, 0, 0, 0, 0, False),
+        )
+
+    def test_build_vision_result_payload_clamps_out_of_range_values(self):
+        payload = build_vision_result_payload(-40000, 40000, -1, 70000, 300, True)
+
+        self.assertEqual(
+            bytes(
+                [
+                    0x80,
+                    0x00,
+                    0x7F,
+                    0xFF,
+                    0x00,
+                    0x00,
+                    0xFF,
+                    0xFF,
+                    0xFF,
+                    1,
+                ]
+            ),
+            payload,
+        )
 
 if __name__ == "__main__":
     unittest.main()
