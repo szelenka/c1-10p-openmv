@@ -115,81 +115,6 @@ def send_vision_result(
     )
 
 
-class SerialLedOutput:
-    def __init__(self, pixel_object, color=OFF, name=None):
-        self.pixel_object = pixel_object
-        self.name = name
-        self._color = color
-        self._dirty = True
-        self._needs_show = False
-        self._paused = False
-        self.draw_count = 0
-        self.cycle_count = 0
-        self.cycle_complete = False
-        self.notify_cycles = 1
-        try:
-            self.pixel_object.auto_write = False
-        except AttributeError:
-            pass
-
-    @property
-    def color(self):
-        return self._color
-
-    @color.setter
-    def color(self, color):
-        if self._color == color:
-            return
-        self._color = color
-        self._dirty = True
-
-    def animate(self, show=True):
-        if self._paused or not self._dirty:
-            return False
-
-        self.draw_count += 1
-        self._fill_pixels(self._color)
-        self._dirty = False
-        self._needs_show = True
-        if show:
-            self.show()
-        return True
-
-    def show(self):
-        if not self._needs_show:
-            return
-        if hasattr(self.pixel_object, "write"):
-            self.pixel_object.write()
-        elif hasattr(self.pixel_object, "show"):
-            self.pixel_object.show()
-        self._needs_show = False
-
-    def fill(self, color):
-        self.color = color
-
-    def freeze(self):
-        self._paused = True
-
-    def resume(self):
-        self._paused = False
-
-    def reset(self):
-        self._dirty = True
-
-    def on_cycle_complete(self):
-        self.cycle_count += 1
-
-    def add_cycle_complete_receiver(self, callback):
-        pass
-
-    def _fill_pixels(self, color):
-        if hasattr(self.pixel_object, "fill"):
-            self.pixel_object.fill(color)
-        else:
-            for index in range(len(self.pixel_object)):
-                self.pixel_object[index] = color
-
-
 class SerialCommandProcessor:
     def __init__(
         self,
@@ -198,7 +123,6 @@ class SerialCommandProcessor:
         pixel_eye_left,
         pixel_periscope,
         animations_by_led_id=None,
-        on_tracking_set=None,
         mirror_eye_commands=False,
     ):
         self.uart = uart
@@ -216,7 +140,6 @@ class SerialCommandProcessor:
         self.animations_by_led_id = animations_by_led_id or {}
         self.mirror_eye_commands = mirror_eye_commands
         self.tracking_enabled = False
-        self.on_tracking_set = on_tracking_set
         self._reset_frame()
         self.apply_all()
 
@@ -342,8 +265,6 @@ class SerialCommandProcessor:
         if len(payload) != 1:
             return
         self.tracking_enabled = payload[0] != 0
-        if self.on_tracking_set:
-            self.on_tracking_set(self.tracking_enabled)
 
     def apply_all(self):
         self.apply_led(LED_ID_RIGHT_EYE)

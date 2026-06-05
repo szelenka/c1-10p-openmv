@@ -21,6 +21,10 @@ from serial_processor import (
     SerialCommandProcessor,
     send_vision_result
 )
+from vision_filter import (
+    FaceTrackingFilter,
+    VISION_UPDATE_MS
+)
 
 UART_BUS = 3
 UART_BAUDRATE = 115200
@@ -30,7 +34,6 @@ MIRROR_EYE_COMMANDS = True
 FACE_CASCADE_STAGES = 25
 FACE_DETECTION_THRESHOLD = 0.75
 FACE_DETECTION_SCALE = 1.25
-VISION_DETECTED_CONFIDENCE = 255
 
 
 def configure_camera():
@@ -61,41 +64,44 @@ def find_largest_face(img, face_cascade):
     return largest_face
 
 
-def send_face_result(uart, face, frame_center_x, frame_center_y):
-    if not face:
-        send_vision_result(uart, 0, 0, 0, 0, 0, False)
-        return
-
-    x, y, width, height = face
-    face_center_x = x + ((width + 1) // 2)
-    face_center_y = y + ((height + 1) // 2)
-    send_vision_result(
-        uart,
-        face_center_x - frame_center_x,
-        face_center_y - frame_center_y,
-        width,
-        height,
-        VISION_DETECTED_CONFIDENCE,
-        True
-    )
-
-
 def poll_face_tracking(
     uart,
     serial_commands,
     face_cascade,
+    tracker,
     frame_center_x,
     frame_center_y
 ):
+    global last_vision_update_ms
+
     if not serial_commands.tracking_enabled:
+        tracker.reset()
+        last_vision_update_ms = 0
         return
 
+    now_ms = pyb.millis()
+    if (
+        last_vision_update_ms and
+        pyb.elapsed_millis(last_vision_update_ms) < VISION_UPDATE_MS
+    ):
+        return
+    last_vision_update_ms = now_ms
+
     img = sensor.snapshot()
-    send_face_result(
-        uart,
+    result = tracker.update(
         find_largest_face(img, face_cascade),
+        now_ms,
         frame_center_x,
         frame_center_y
+    )
+    send_vision_result(
+        uart,
+        result[0],
+        result[1],
+        result[2],
+        result[3],
+        result[4],
+        result[5]
     )
 
 
@@ -158,6 +164,9 @@ group = AnimationGroup(
     periscope_output
 )
 
+face_tracker = FaceTrackingFilter()
+last_vision_update_ms = 0
+
 uart = pyb.UART(
     UART_BUS,
     UART_BAUDRATE,
@@ -174,7 +183,6 @@ serial_commands = SerialCommandProcessor(
         LED_ID_LEFT_EYE: pulse_eye_left,
         LED_ID_PERISCOPE: periscope_output,
     },
-    on_tracking_set=lambda _: print(_),
     mirror_eye_commands=MIRROR_EYE_COMMANDS
 )
 
@@ -190,6 +198,7 @@ while True:
         uart,
         serial_commands,
         face_cascade,
+        face_tracker,
         FRAME_CENTER_X,
         FRAME_CENTER_Y
     )

@@ -14,7 +14,6 @@ from serial_processor import (
     MAX_PAYLOAD_SIZE,
     SYNC,
     SerialCommandProcessor,
-    SerialLedOutput,
     build_vision_result_frame,
     build_vision_result_payload,
 )
@@ -81,8 +80,7 @@ class SerialCommandProcessorTest(unittest.TestCase):
         self.periscope_pixels = FakePixels(1)
         self.right_pulse = FakePulse()
         self.left_pulse = FakePulse()
-        self.periscope_output = SerialLedOutput(self.periscope_pixels)
-        self.tracking_updates = []
+        self.periscope_output = FakePulse()
         self.processor = SerialCommandProcessor(
             self.uart,
             self.right_pixels,
@@ -93,7 +91,6 @@ class SerialCommandProcessorTest(unittest.TestCase):
                 LED_ID_LEFT_EYE: self.left_pulse,
                 LED_ID_PERISCOPE: self.periscope_output,
             },
-            on_tracking_set=self.tracking_updates.append,
         )
 
     def feed_frame(self, cmd, payload):
@@ -191,43 +188,50 @@ class SerialCommandProcessorTest(unittest.TestCase):
         self.assertEqual((60, 30, 15), self.right_pulse.color)
         self.assertEqual(0, self.right_pixels.write_count)
 
-    def test_periscope_color_renders_on_next_output_phase(self):
+    def test_periscope_color_updates_animation_color(self):
         self.feed_frame(CMD_LED_SET_COLOR, [LED_ID_PERISCOPE, 0, 255, 0, 0])
 
         self.assertEqual((0, 255, 0), self.periscope_output.color)
         self.assertEqual(0, self.periscope_pixels.write_count)
 
-        self.assertTrue(self.periscope_output.animate())
-        self.assertEqual([(0, 255, 0)], self.periscope_pixels.values)
-        self.assertEqual(1, self.periscope_pixels.write_count)
-
-    def test_periscope_led_off_turns_off_on_next_output_phase(self):
+    def test_periscope_led_off_updates_animation_color(self):
         self.feed_frame(CMD_LED_SET_COLOR, [LED_ID_PERISCOPE, 255, 0, 0, 0])
-        self.periscope_output.animate()
 
         self.feed_frame(CMD_LED_OFF, [LED_ID_PERISCOPE])
 
         self.assertEqual((0, 0, 0), self.periscope_output.color)
-        self.assertEqual([(255, 0, 0)], self.periscope_pixels.values)
-        self.assertEqual(1, self.periscope_pixels.write_count)
-
-        self.assertTrue(self.periscope_output.animate())
-        self.assertEqual([(0, 0, 0)], self.periscope_pixels.values)
-        self.assertEqual(2, self.periscope_pixels.write_count)
+        self.assertEqual(0, self.periscope_pixels.write_count)
 
     def test_periscope_led_on_restores_stored_color(self):
         self.feed_frame(CMD_LED_SET_COLOR, [LED_ID_PERISCOPE, 40, 80, 120, 0])
         self.feed_frame(CMD_LED_OFF, [LED_ID_PERISCOPE])
-        self.periscope_output.animate()
 
         self.feed_frame(CMD_LED_ON, [LED_ID_PERISCOPE])
 
         self.assertEqual((40, 80, 120), self.periscope_output.color)
-        self.assertEqual(1, self.periscope_pixels.write_count)
+        self.assertEqual(0, self.periscope_pixels.write_count)
 
-        self.assertTrue(self.periscope_output.animate())
-        self.assertEqual([(40, 80, 120)], self.periscope_pixels.values)
-        self.assertEqual(2, self.periscope_pixels.write_count)
+    def test_led_without_animation_falls_back_to_direct_pixel_write(self):
+        uart = FakeUART()
+        pixels = FakePixels(1)
+        processor = SerialCommandProcessor(
+            uart,
+            self.right_pixels,
+            self.left_pixels,
+            pixels,
+            animations_by_led_id={
+                LED_ID_RIGHT_EYE: self.right_pulse,
+                LED_ID_LEFT_EYE: self.left_pulse,
+            },
+        )
+
+        self.assertEqual([(0, 0, 0)], pixels.values)
+        self.assertEqual(1, pixels.write_count)
+        uart.feed(frame(CMD_LED_SET_COLOR, [LED_ID_PERISCOPE, 40, 80, 120, 0]))
+        processor.poll()
+
+        self.assertEqual([(40, 80, 120)], pixels.values)
+        self.assertEqual(2, pixels.write_count)
 
     def test_removed_periscope_state_command_is_ignored(self):
         self.feed_frame(CMD_LED_SET_COLOR, [LED_ID_PERISCOPE, 255, 0, 0, 0])
@@ -238,12 +242,13 @@ class SerialCommandProcessorTest(unittest.TestCase):
 
         self.assertEqual((0, 0, 0), self.periscope_output.color)
 
-    def test_tracking_set_updates_state_and_callback(self):
+    def test_tracking_set_updates_state(self):
         self.feed_frame(CMD_TRACKING_SET, [1])
+        self.assertTrue(self.processor.tracking_enabled)
+
         self.feed_frame(CMD_TRACKING_SET, [0])
 
         self.assertFalse(self.processor.tracking_enabled)
-        self.assertEqual([True, False], self.tracking_updates)
 
     def test_led_set_pattern_is_ignored(self):
         before = self.right_pulse.color
