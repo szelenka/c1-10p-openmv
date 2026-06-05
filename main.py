@@ -21,7 +21,7 @@ from serial_processor import (
     SerialCommandProcessor
 )
 
-UART_BUS = 2
+UART_BUS = 3
 UART_BAUDRATE = 115200
 
 # setup neopixel
@@ -35,7 +35,15 @@ pixel_ladder = PixelSubset(
     16
 )
 pixel_periscope = neopixel.NeoPixel(machine.Pin.board.P3, 1)
-periscope_output = SerialLedOutput(pixel_periscope, name="periscope")
+periscope_output = Pulse(
+    pixel_periscope,
+    speed=0.01, # duration until next initenxity increase (in seconds)
+    color=BLUE,
+    period=5,
+    breath=0,
+    min_intensity=0.01,
+    max_intensity=0.3
+)
 
 pulse_eye_right = Pulse(
     pixel_eye_right,
