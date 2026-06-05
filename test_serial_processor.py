@@ -122,6 +122,48 @@ class SerialCommandProcessorTest(unittest.TestCase):
         self.processor.poll()
         self.assertEqual((0, 0, 255), self.left_pulse.color)
 
+    def test_back_to_back_eye_frames_update_both_pulses_in_one_poll(self):
+        self.uart.feed(
+            bytes.fromhex(
+                "A5 01 05 01 FF 00 00 00 FA"
+                "A5 01 05 02 FF 00 00 00 F9"
+            )
+        )
+
+        self.processor.poll()
+
+        self.assertEqual((255, 0, 0), self.right_pulse.color)
+        self.assertEqual((255, 0, 0), self.left_pulse.color)
+
+    def test_mirrored_eye_color_command_updates_both_pulses(self):
+        uart = FakeUART()
+        right_pulse = FakePulse()
+        left_pulse = FakePulse()
+        processor = SerialCommandProcessor(
+            uart,
+            self.right_pixels,
+            self.left_pixels,
+            self.periscope_pixels,
+            animations_by_led_id={
+                LED_ID_RIGHT_EYE: right_pulse,
+                LED_ID_LEFT_EYE: left_pulse,
+                LED_ID_PERISCOPE: self.periscope_output,
+            },
+            mirror_eye_commands=True,
+        )
+
+        uart.feed(bytes.fromhex("A5 01 05 01 FF 00 00 00 FA"))
+        processor.poll()
+
+        self.assertEqual((255, 0, 0), right_pulse.color)
+        self.assertEqual((255, 0, 0), left_pulse.color)
+
+        uart.feed(bytes.fromhex("A5 01 05 02 00 00 FF 00 F9"))
+        processor.poll()
+
+        self.assertEqual((0, 0, 255), right_pulse.color)
+        self.assertEqual((0, 0, 255), left_pulse.color)
+
     def test_white_channel_is_folded_into_rgb_and_clamped(self):
         self.feed_frame(CMD_LED_SET_COLOR, [LED_ID_RIGHT_EYE, 250, 10, 0, 20])
 

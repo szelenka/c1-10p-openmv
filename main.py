@@ -22,6 +22,8 @@ from serial_processor import (
 
 UART_BUS = 3
 UART_BAUDRATE = 115200
+UART_READ_BUFFER = 256
+MIRROR_EYE_COMMANDS = True
 
 # setup neopixel
 # For RGBW NeoPixels, simply change the ORDER to RGBW or GRBW.
@@ -82,7 +84,12 @@ group = AnimationGroup(
     periscope_output
 )
 
-uart = pyb.UART(UART_BUS, UART_BAUDRATE, timeout_char=0)
+uart = pyb.UART(
+    UART_BUS,
+    UART_BAUDRATE,
+    timeout_char=0,
+    read_buf_len=UART_READ_BUFFER
+)
 serial_commands = SerialCommandProcessor(
     uart,
     pixel_eye_right,
@@ -93,7 +100,8 @@ serial_commands = SerialCommandProcessor(
         LED_ID_LEFT_EYE: pulse_eye_left,
         LED_ID_PERISCOPE: periscope_output,
     },
-    on_tracking_set=lambda _: print(_)
+    on_tracking_set=lambda _: print(_),
+    mirror_eye_commands=MIRROR_EYE_COMMANDS
 )
 
 

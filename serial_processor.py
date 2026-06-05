@@ -106,6 +106,7 @@ class SerialCommandProcessor:
         pixel_periscope,
         animations_by_led_id=None,
         on_tracking_set=None,
+        mirror_eye_commands=False,
     ):
         self.uart = uart
         self.pixels_by_led_id = {
@@ -120,6 +121,7 @@ class SerialCommandProcessor:
         }
         self.led_state[LED_ID_PERISCOPE]["enabled"] = False
         self.animations_by_led_id = animations_by_led_id or {}
+        self.mirror_eye_commands = mirror_eye_commands
         self.tracking_enabled = False
         self.on_tracking_set = on_tracking_set
         self._reset_frame()
@@ -207,14 +209,11 @@ class SerialCommandProcessor:
         led_id = payload[0]
         if led_id not in self.led_state:
             return
-        self.led_state[led_id]["color"] = (
-            payload[1],
-            payload[2],
-            payload[3],
-            payload[4],
-        )
-        self.led_state[led_id]["enabled"] = True
-        self.apply_led(led_id)
+        color = (payload[1], payload[2], payload[3], payload[4])
+        for target_led_id in self._target_led_ids(led_id):
+            self.led_state[target_led_id]["color"] = color
+            self.led_state[target_led_id]["enabled"] = True
+            self.apply_led(target_led_id)
 
     def _handle_led_set_brightness(self, payload):
         if len(payload) != 2:
@@ -222,8 +221,9 @@ class SerialCommandProcessor:
         led_id = payload[0]
         if led_id not in self.led_state:
             return
-        self.led_state[led_id]["brightness"] = payload[1]
-        self.apply_led(led_id)
+        for target_led_id in self._target_led_ids(led_id):
+            self.led_state[target_led_id]["brightness"] = payload[1]
+            self.apply_led(target_led_id)
 
     def _handle_led_off(self, payload):
         if len(payload) != 1:
@@ -231,8 +231,9 @@ class SerialCommandProcessor:
         led_id = payload[0]
         if led_id not in self.led_state:
             return
-        self.led_state[led_id]["enabled"] = False
-        self._turn_off_led_id(led_id)
+        for target_led_id in self._target_led_ids(led_id):
+            self.led_state[target_led_id]["enabled"] = False
+            self._turn_off_led_id(target_led_id)
 
     def _handle_led_on(self, payload):
         if len(payload) != 1:
@@ -240,8 +241,9 @@ class SerialCommandProcessor:
         led_id = payload[0]
         if led_id not in self.led_state:
             return
-        self.led_state[led_id]["enabled"] = True
-        self.apply_led(led_id)
+        for target_led_id in self._target_led_ids(led_id):
+            self.led_state[target_led_id]["enabled"] = True
+            self.apply_led(target_led_id)
 
     def _handle_tracking_set(self, payload):
         if len(payload) != 1:
@@ -254,6 +256,13 @@ class SerialCommandProcessor:
         self.apply_led(LED_ID_RIGHT_EYE)
         self.apply_led(LED_ID_LEFT_EYE)
         self.apply_led(LED_ID_PERISCOPE)
+
+    def _target_led_ids(self, led_id):
+        if self.mirror_eye_commands and (
+            led_id == LED_ID_RIGHT_EYE or led_id == LED_ID_LEFT_EYE
+        ):
+            return (LED_ID_RIGHT_EYE, LED_ID_LEFT_EYE)
+        return (led_id,)
 
     def apply_led(self, led_id):
         state = self.led_state.get(led_id)
