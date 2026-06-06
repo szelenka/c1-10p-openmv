@@ -115,6 +115,26 @@ def send_vision_result(
     )
 
 
+def _hex_byte(byte):
+    digits = "0123456789ABCDEF"
+    byte &= 0xFF
+    return digits[(byte >> 4) & 0x0F] + digits[byte & 0x0F]
+
+
+def _debug_received_packet(cmd, payload, received_checksum, expected_checksum):
+    packet = [SYNC, cmd, len(payload)] + payload + [received_checksum]
+    packet_hex = " ".join(_hex_byte(byte) for byte in packet)
+    if received_checksum == expected_checksum:
+        print("openmv rx frame ok %s" % packet_hex)
+    else:
+        print(
+            "openmv rx frame bad expected=%s %s" % (
+                _hex_byte(expected_checksum),
+                packet_hex
+            )
+        )
+
+
 class SerialCommandProcessor:
     def __init__(
         self,
@@ -124,6 +144,7 @@ class SerialCommandProcessor:
         pixel_periscope,
         animations_by_led_id=None,
         mirror_eye_commands=False,
+        debug_received_packets=False,
     ):
         self.uart = uart
         self.pixels_by_led_id = {
@@ -139,6 +160,7 @@ class SerialCommandProcessor:
         self.led_state[LED_ID_PERISCOPE]["enabled"] = False
         self.animations_by_led_id = animations_by_led_id or {}
         self.mirror_eye_commands = mirror_eye_commands
+        self.debug_received_packets = debug_received_packets
         self.tracking_enabled = False
         self._reset_frame()
         self.apply_all()
@@ -201,6 +223,8 @@ class SerialCommandProcessor:
             return
 
         if self._parser_state == WAIT_CHECKSUM:
+            if self.debug_received_packets:
+                _debug_received_packet(self._cmd, self._payload, byte, self._checksum)
             if byte == self._checksum:
                 self.dispatch_frame(self._cmd, self._payload)
             self._reset_frame()

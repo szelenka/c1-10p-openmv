@@ -1,3 +1,5 @@
+from contextlib import redirect_stdout
+from io import StringIO
 import unittest
 
 from serial_processor import (
@@ -70,6 +72,10 @@ def bad_checksum(data):
     corrupted = bytearray(data)
     corrupted[-1] ^= 0xFF
     return bytes(corrupted)
+
+
+def hex_bytes(data):
+    return " ".join("%02X" % byte for byte in data)
 
 
 class SerialCommandProcessorTest(unittest.TestCase):
@@ -265,6 +271,36 @@ class SerialCommandProcessorTest(unittest.TestCase):
         self.processor.poll()
 
         self.assertEqual((255, 0, 0), self.right_pulse.color)
+
+    def test_debug_received_packets_prints_full_valid_wire_frame(self):
+        data = frame(CMD_LED_SET_COLOR, [LED_ID_RIGHT_EYE, 255, 0, 0, 0])
+        self.processor.debug_received_packets = True
+        self.uart.feed(data)
+
+        output = StringIO()
+        with redirect_stdout(output):
+            self.processor.poll()
+
+        self.assertEqual(
+            "openmv rx frame ok %s\n" % hex_bytes(data),
+            output.getvalue()
+        )
+
+    def test_debug_received_packets_prints_bad_checksum_frame(self):
+        data = bad_checksum(
+            frame(CMD_LED_SET_COLOR, [LED_ID_RIGHT_EYE, 0, 255, 0, 0])
+        )
+        self.processor.debug_received_packets = True
+        self.uart.feed(data)
+
+        output = StringIO()
+        with redirect_stdout(output):
+            self.processor.poll()
+
+        self.assertEqual(
+            "openmv rx frame bad expected=FA %s\n" % hex_bytes(data),
+            output.getvalue()
+        )
 
     def test_partial_frame_completes_across_polls(self):
         data = frame(CMD_LED_SET_COLOR, [LED_ID_LEFT_EYE, 0, 255, 0, 0])

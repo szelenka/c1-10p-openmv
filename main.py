@@ -30,6 +30,7 @@ UART_BUS = 3
 UART_BAUDRATE = 115200
 UART_READ_BUFFER = 256
 MIRROR_EYE_COMMANDS = True
+DEBUG_RECEIVED_PACKETS = True
 
 FACE_CASCADE_STAGES = 25
 FACE_DETECTION_THRESHOLD = 0.75
@@ -183,7 +184,8 @@ serial_commands = SerialCommandProcessor(
         LED_ID_LEFT_EYE: pulse_eye_left,
         LED_ID_PERISCOPE: periscope_output,
     },
-    mirror_eye_commands=MIRROR_EYE_COMMANDS
+    mirror_eye_commands=MIRROR_EYE_COMMANDS,
+    debug_received_packets=DEBUG_RECEIVED_PACKETS
 )
 
 configure_camera()
